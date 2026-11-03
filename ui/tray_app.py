@@ -480,7 +480,15 @@ class RetainerApp:
             self.open_settings()
             return
 
-        if not config.get("obsidian_vault"):
+        save_obs = config.get("save_to_obsidian", True)
+        save_apple = config.get("save_to_apple_notes", False)
+
+        if not save_obs and not save_apple:
+            notify_mac("Configuration Needed", "Please enable Obsidian, Apple Notes, or both in Settings.")
+            self.open_settings()
+            return
+
+        if save_obs and not config.get("obsidian_vault"):
             notify_mac("Configuration Needed", "Please select your Obsidian Vault in Settings.")
             self.open_settings()
             return
@@ -503,7 +511,9 @@ class RetainerApp:
         card_count = result.get("card_count", 0)
         anki_status = result.get("anki_status", "skipped")
 
-        msg = f"Saved to Obsidian/Retainer!"
+        destinations = result.get("destinations", ["Obsidian"])
+        dest_str = " & ".join(destinations) if destinations else "Retainer"
+        msg = f"Saved to {dest_str}!"
         if "pushed" in anki_status:
             msg += f" + {card_count} cards added to Anki."
         elif "unreachable" in anki_status:

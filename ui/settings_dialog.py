@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QMessageBox,
     QGroupBox,
+    QFrame,
 )
 from PyQt6.QtCore import Qt
 
@@ -67,28 +68,58 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(api_group)
 
-        # 2. Obsidian Vault Section
-        obs_group = QGroupBox("Obsidian Vault")
-        obs_layout = QVBoxLayout(obs_group)
-        obs_layout.setSpacing(6)
+        # 2. Note Destination Section (Obsidian and/or Apple Notes)
+        dest_group = QGroupBox("Note Destinations")
+        dest_layout = QVBoxLayout(dest_group)
+        dest_layout.setSpacing(10)
+
+        # Apple Notes Checkbox & Folder
+        self.apple_notes_chk = QCheckBox("Save to Apple Notes (Native macOS)")
+        self.apple_notes_chk.setChecked(self.config.get("save_to_apple_notes", False))
+        self.apple_notes_chk.toggled.connect(self.toggle_destinations)
+        dest_layout.addWidget(self.apple_notes_chk)
+
+        an_row = QHBoxLayout()
+        an_row.setContentsMargins(20, 0, 0, 0)
+        an_row.addWidget(QLabel("Folder Name:"))
+        self.apple_folder_input = QLineEdit()
+        self.apple_folder_input.setPlaceholderText("Retainer")
+        self.apple_folder_input.setText(self.config.get("apple_notes_folder", "Retainer"))
+        an_row.addWidget(self.apple_folder_input)
+        dest_layout.addLayout(an_row)
+
+        dest_sep = QFrame()
+        dest_sep.setFrameShape(QFrame.Shape.HLine)
+        dest_sep.setFrameShadow(QFrame.Shadow.Sunken)
+        dest_layout.addWidget(dest_sep)
+
+        # Obsidian Checkbox & Vault
+        self.obsidian_chk = QCheckBox("Save to Obsidian Vault")
+        self.obsidian_chk.setChecked(self.config.get("save_to_obsidian", True))
+        self.obsidian_chk.toggled.connect(self.toggle_destinations)
+        dest_layout.addWidget(self.obsidian_chk)
 
         obs_row = QHBoxLayout()
+        obs_row.setContentsMargins(20, 0, 0, 0)
         self.vault_input = QLineEdit()
         self.vault_input.setPlaceholderText("/Users/.../MyObsidianVault")
         self.vault_input.setText(self.config.get("obsidian_vault", ""))
 
-        browse_btn = QPushButton("Browse...")
-        browse_btn.setFixedWidth(85)
-        browse_btn.clicked.connect(self.browse_vault)
+        self.browse_btn = QPushButton("Browse...")
+        self.browse_btn.setFixedWidth(85)
+        self.browse_btn.clicked.connect(self.browse_vault)
 
         obs_row.addWidget(self.vault_input)
-        obs_row.addWidget(browse_btn)
-        obs_layout.addLayout(obs_row)
+        obs_row.addWidget(self.browse_btn)
+        dest_layout.addLayout(obs_row)
 
-        obs_hint = QLabel("A folder named '<b>Retainer</b>' will be automatically created inside your vault.")
-        obs_hint.setStyleSheet("color: #777; font-size: 11px;")
-        obs_layout.addWidget(obs_hint)
-        layout.addWidget(obs_group)
+        self.obs_hint = QLabel("A folder named '<b>Retainer</b>' will be automatically created inside your vault.")
+        self.obs_hint.setStyleSheet("color: #777; font-size: 11px; margin-left: 20px;")
+        dest_layout.addWidget(self.obs_hint)
+
+        layout.addWidget(dest_group)
+
+        self.toggle_destinations()
 
         # 3. Anki Connection (Optional)
         anki_group = QGroupBox("Anki Connection (Optional)")
@@ -138,6 +169,15 @@ class SettingsDialog(QDialog):
         btn_layout.addWidget(save_btn)
         layout.addLayout(btn_layout)
 
+    def toggle_destinations(self):
+        obs_active = self.obsidian_chk.isChecked()
+        self.vault_input.setEnabled(obs_active)
+        self.browse_btn.setEnabled(obs_active)
+        self.obs_hint.setEnabled(obs_active)
+
+        apple_active = self.apple_notes_chk.isChecked()
+        self.apple_folder_input.setEnabled(apple_active)
+
     def toggle_api_visibility(self):
         if self.api_key_input.echoMode() == QLineEdit.EchoMode.Password:
             self.api_key_input.setEchoMode(QLineEdit.EchoMode.Normal)
@@ -159,8 +199,28 @@ class SettingsDialog(QDialog):
             retainer_path.mkdir(parents=True, exist_ok=True)
 
     def save(self):
+        save_obs = self.obsidian_chk.isChecked()
+        save_apple = self.apple_notes_chk.isChecked()
+
+        if not save_obs and not save_apple:
+            QMessageBox.warning(
+                self,
+                "No Destination Selected",
+                "Please select at least one note destination (Obsidian or Apple Notes).",
+            )
+            return
+
         vault = self.vault_input.text().strip()
+        if save_obs and not vault:
+            QMessageBox.warning(
+                self,
+                "Obsidian Vault Required",
+                "You have enabled Obsidian. Please select an Obsidian Vault folder.",
+            )
+            return
+
         api_key = self.api_key_input.text().strip()
+        apple_folder = self.apple_folder_input.text().strip() or "Retainer"
 
         try:
             port = int(self.anki_port_input.text().strip())
@@ -168,7 +228,7 @@ class SettingsDialog(QDialog):
             port = 8765
 
         # Check Retainer creation
-        if vault:
+        if save_obs and vault:
             vault_p = Path(vault).expanduser().resolve()
             if not vault_p.exists():
                 try:
@@ -181,7 +241,10 @@ class SettingsDialog(QDialog):
 
         self.config["gemini_api_key"] = api_key
         self.config["jina_api_key"] = self.jina_key_input.text().strip()
+        self.config["save_to_obsidian"] = save_obs
         self.config["obsidian_vault"] = vault
+        self.config["save_to_apple_notes"] = save_apple
+        self.config["apple_notes_folder"] = apple_folder
         self.config["anki_enabled"] = self.anki_enabled_chk.isChecked()
         self.config["anki_host"] = self.anki_host_input.text().strip() or "127.0.0.1"
         self.config["anki_port"] = port

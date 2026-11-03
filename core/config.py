@@ -8,8 +8,11 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 
 DEFAULT_CONFIG = {
     "gemini_api_key": "",
+    "save_to_obsidian": True,
     "obsidian_vault": "",
     "retainer_folder_name": "Retainer",
+    "save_to_apple_notes": False,
+    "apple_notes_folder": "Retainer",
     "jina_api_key": "",
     "anki_enabled": False,
     "anki_host": "127.0.0.1",

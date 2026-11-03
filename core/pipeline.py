@@ -6,6 +6,7 @@ from core.youtube import extract_video_id, fetch_video_metadata, fetch_transcrip
 from core.reader import is_youtube_url, is_valid_url, normalize_url, fetch_article_jina
 from core.ai import analyze_transcript
 from core.obsidian import save_obsidian_note
+from core.apple_notes import save_apple_note
 from core.anki import AnkiConnectClient
 
 
@@ -31,10 +32,16 @@ def run_pipeline(
 
     config = load_config()
 
-    # Validate Vault directory
+    # Validate destination configuration
+    save_obsidian = config.get("save_to_obsidian", True)
+    save_apple = config.get("save_to_apple_notes", False)
+
+    if not save_obsidian and not save_apple:
+        raise ValueError("No destination selected. Please enable Obsidian, Apple Notes, or both in Settings.")
+
     vault_dir = config.get("obsidian_vault", "").strip()
-    if not vault_dir:
-        raise ValueError("Obsidian Vault path is not configured. Please open Settings and select your vault.")
+    if save_obsidian and not vault_dir:
+        raise ValueError("Obsidian is enabled but Vault path is not configured. Please select your vault in Settings.")
 
     # Validate Gemini API Key
     api_key = config.get("gemini_api_key", "").strip()
@@ -93,16 +100,33 @@ def run_pipeline(
         content_type=content_type,
     )
 
-    # 3. Save to Obsidian Vault -> Retainer subfolder
-    log("Writing note to Obsidian Vault/Retainer...")
-    retainer_name = config.get("retainer_folder_name", "Retainer")
-    note_path, _ = save_obsidian_note(
-        vault_path_str=vault_dir,
-        metadata=metadata,
-        analysis=analysis,
-        raw_transcript=raw_content,
-        retainer_folder_name=retainer_name,
-    )
+    # 3. Save Notes (Obsidian and/or Apple Notes)
+    saved_destinations = []
+    note_path = None
+
+    if save_obsidian:
+        log("Writing note to Obsidian Vault/Retainer...")
+        retainer_name = config.get("retainer_folder_name", "Retainer")
+        obsidian_file, _ = save_obsidian_note(
+            vault_path_str=vault_dir,
+            metadata=metadata,
+            analysis=analysis,
+            raw_transcript=raw_content,
+            retainer_folder_name=retainer_name,
+        )
+        note_path = obsidian_file
+        saved_destinations.append("Obsidian")
+
+    if save_apple:
+        log("Writing note to Apple Notes...")
+        an_folder = config.get("apple_notes_folder", "Retainer")
+        save_apple_note(
+            metadata=metadata,
+            analysis=analysis,
+            raw_transcript=raw_content,
+            folder_name=an_folder,
+        )
+        saved_destinations.append("Apple Notes")
 
     # 4. Optional Anki step
     anki_status = "skipped"
@@ -130,7 +154,8 @@ def run_pipeline(
         "title": metadata.get("title"),
         "channel": metadata.get("channel"),
         "content_type": content_type,
-        "note_path": str(note_path),
+        "note_path": str(note_path) if note_path else None,
+        "destinations": saved_destinations,
         "card_count": len(analysis.get("flashcards", [])),
         "anki_status": anki_status,
         "anki_added": anki_added,
