@@ -165,7 +165,7 @@ class QuickCapturePalette(QWidget):
         self.url_input.setPlaceholderText("Paste YouTube or Article URL...")
         self.url_input.returnPressed.connect(self.on_generate_clicked)
 
-        self.paste_btn = QPushButton("Paste & Go")
+        self.paste_btn = QPushButton("Paste && Go")
         self.paste_btn.setObjectName("secondaryBtn")
         self.paste_btn.setToolTip("Paste clipboard & automatically run if valid")
         self.paste_btn.clicked.connect(self.on_paste_and_go_clicked)
@@ -338,13 +338,10 @@ class QuickCapturePalette(QWidget):
         self.setStyleSheet(style)
 
     def prepare_open(self):
-        """Refreshes theme and fills clipboard URL if present."""
+        """Refreshes theme, clears any previous input, and focuses the field."""
         self.apply_theme()
-        clipboard = QApplication.clipboard().text().strip()
-        if clipboard:
-            self.url_input.setText(clipboard)
+        self.url_input.clear()
         self.url_input.setFocus()
-        self.url_input.selectAll()
 
     def on_paste_and_go_clicked(self):
         text = QApplication.clipboard().text().strip()
