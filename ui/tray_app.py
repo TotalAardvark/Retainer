@@ -1,5 +1,7 @@
 import sys
 import time
+import ctypes
+import ctypes.util
 import subprocess
 from typing import Optional
 
@@ -24,6 +26,39 @@ from core.reader import is_youtube_url, is_valid_url
 from core.pipeline import run_pipeline
 from ui.assets import get_brain_icon, get_processing_icon
 from ui.settings_dialog import SettingsDialog
+
+
+def set_mac_dock_icon_hidden(hidden: bool) -> None:
+    """
+    Dynamically shows or hides the macOS Dock icon at runtime via Objective-C runtime:
+    0 = NSApplicationActivationPolicyRegular (shows in Dock)
+    1 = NSApplicationActivationPolicyAccessory (hidden from Dock, Menu Bar only)
+    """
+    if sys.platform != "darwin":
+        return
+    try:
+        objc = ctypes.cdll.LoadLibrary(ctypes.util.find_library("objc"))
+        objc.objc_getClass.restype = ctypes.c_void_p
+        objc.objc_getClass.argtypes = [ctypes.c_char_p]
+        objc.sel_registerName.restype = ctypes.c_void_p
+        objc.sel_registerName.argtypes = [ctypes.c_char_p]
+
+        msg_get = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)(
+            ("objc_msgSend", objc)
+        )
+        msg_set_policy = ctypes.CFUNCTYPE(
+            ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long
+        )(("objc_msgSend", objc))
+
+        ns_app_cls = objc.objc_getClass(b"NSApplication")
+        shared_sel = objc.sel_registerName(b"sharedApplication")
+        ns_app = msg_get(ns_app_cls, shared_sel)
+        if ns_app:
+            policy_sel = objc.sel_registerName(b"setActivationPolicy:")
+            policy = 1 if hidden else 0
+            msg_set_policy(ns_app, policy_sel, policy)
+    except Exception:
+        pass
 
 
 def notify_mac(title: str, message: str):
@@ -370,19 +405,37 @@ CompactPopover = QuickCapturePalette
 
 class PaletteDismissFilter(QObject):
     """
-    Global event filter that detects clicks outside the palette card
-    or when another app takes focus, dismissing the palette immediately.
+    Global event filter that detects:
+    - macOS Dock icon clicks / app activation (ApplicationActivate) to open the palette
+    - clicks outside the palette card or when another app takes focus to dismiss it
     """
     def __init__(self, app_instance):
         super().__init__()
         self.app_instance = app_instance
         self.shown_time = 0.0
+        self.startup_time = time.time()
 
     def mark_shown(self):
         self.shown_time = time.time()
 
     def eventFilter(self, obj, event):
         palette = self.app_instance.popover
+
+        # Handle Dock icon click / Spotlight reopen when palette is closed
+        if (
+            obj == QApplication.instance()
+            and event.type() == QEvent.Type.ApplicationActivate
+        ):
+            now = time.time()
+            if (
+                not palette.isVisible()
+                and not self.app_instance.settings_open
+                and (now - self.startup_time > 0.6)
+                and (now - self.app_instance.last_close_time > 0.35)
+            ):
+                self.app_instance.show_popover()
+            return super().eventFilter(obj, event)
+
         if not palette.isVisible():
             return super().eventFilter(obj, event)
 
@@ -408,6 +461,9 @@ class PaletteDismissFilter(QObject):
 
 class RetainerApp:
     def __init__(self):
+        config = load_config()
+        set_mac_dock_icon_hidden(bool(config.get("hide_dock_icon", False)))
+
         self.tray_icon = QSystemTrayIcon()
         self.tray_icon.setIcon(get_brain_icon())
         self.tray_icon.setToolTip("Retainer - Quick Capture")
@@ -421,9 +477,10 @@ class RetainerApp:
         self.tray_icon.activated.connect(self.on_tray_activated)
         self.worker: Optional[PipelineWorker] = None
         self.is_processing = False
+        self.settings_open = False
         self.last_close_time = 0.0
 
-        # Install click-outside dismiss monitor
+        # Install click-outside & Dock click monitor
         self.dismiss_filter = PaletteDismissFilter(self)
         QApplication.instance().installEventFilter(self.dismiss_filter)
         self.popover.installEventFilter(self.dismiss_filter)
@@ -466,8 +523,15 @@ class RetainerApp:
         self.popover.activateWindow()
 
     def open_settings(self):
-        dialog = SettingsDialog()
-        dialog.exec()
+        self.settings_open = True
+        try:
+            dialog = SettingsDialog()
+            if dialog.exec():
+                updated_cfg = load_config()
+                set_mac_dock_icon_hidden(bool(updated_cfg.get("hide_dock_icon", False)))
+        finally:
+            self.settings_open = False
+            self.last_close_time = time.time()
 
     def start_processing(self, url: str):
         if self.is_processing:

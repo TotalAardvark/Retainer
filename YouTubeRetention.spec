@@ -1,7 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = []
+datas = [
+    ('ui/assets/brain_template.png', 'ui/assets'),
+    ('ui/assets/app_icon.icns', 'ui/assets'),
+    ('brain_reference.png', '.'),
+]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('PyQt6')
@@ -58,6 +62,14 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='YouTubeRetention.app',
-    icon=None,
-    bundle_identifier=None,
+    icon='ui/assets/app_icon.icns',
+    bundle_identifier='com.retainer.app',
+    info_plist={
+        'CFBundleName': 'Retainer',
+        'CFBundleDisplayName': 'Retainer',
+        'CFBundleShortVersionString': '1.1.0',
+        'CFBundleVersion': '1.1.0',
+        'NSHighResolutionCapable': True,
+        'NSAppleEventsUsageDescription': 'Retainer uses AppleEvents to create rich notes in Apple Notes and display macOS notifications.',
+    },
 )

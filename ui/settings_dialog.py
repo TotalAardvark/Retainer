@@ -51,7 +51,7 @@ class SettingsDialog(QDialog):
         api_row.addWidget(toggle_api_btn)
         api_layout.addLayout(api_row)
 
-        api_hint = QLabel("Used for transcript & article summarization with Gemini 3.8 Flash.")
+        api_hint = QLabel("Used for transcript & article summarization. Stored securely in macOS Keychain.")
         api_hint.setStyleSheet("color: #777; font-size: 11px;")
         api_layout.addWidget(api_hint)
 
@@ -154,6 +154,17 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(anki_group)
 
+        # 4. Appearance / macOS Integration
+        app_group = QGroupBox("macOS Appearance")
+        app_layout = QVBoxLayout(app_group)
+        app_layout.setSpacing(6)
+
+        self.hide_dock_chk = QCheckBox("Hide icon in Dock (Menu Bar only)")
+        self.hide_dock_chk.setChecked(self.config.get("hide_dock_icon", False))
+        app_layout.addWidget(self.hide_dock_chk)
+
+        layout.addWidget(app_group)
+
         # Bottom Buttons
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
@@ -249,6 +260,7 @@ class SettingsDialog(QDialog):
         self.config["anki_host"] = self.anki_host_input.text().strip() or "127.0.0.1"
         self.config["anki_port"] = port
         self.config["anki_deck"] = self.anki_deck_input.text().strip() or "YouTube Retention"
+        self.config["hide_dock_icon"] = self.hide_dock_chk.isChecked()
 
         save_config(self.config)
         self.accept()

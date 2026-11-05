@@ -1,9 +1,6 @@
-"""Generates clean vector SVG icons for the macOS Menu Bar."""
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor
-from PyQt6.QtCore import QByteArray, QSize, Qt
-from PyQt6.QtSvg import QSvgRenderer
-
+"""Generates clean vector and template icons for the macOS Menu Bar and App Bundle."""
 import os
+import sys
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QImage
 from PyQt6.QtCore import QByteArray, QRectF, Qt
 from PyQt6.QtSvg import QSvgRenderer
@@ -20,16 +17,32 @@ PROCESSING_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" 
 </svg>"""
 
 
+def _resolve_brain_png_path() -> str:
+    """Resolve the brain reference PNG across dev and PyInstaller frozen environments."""
+    candidates = []
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        base = sys._MEIPASS
+        candidates.append(os.path.join(base, "ui", "assets", "brain_template.png"))
+        candidates.append(os.path.join(base, "brain_reference.png"))
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(here)
+    candidates.append(os.path.join(here, "assets", "brain_template.png"))
+    candidates.append(os.path.join(project_root, "brain_reference.png"))
+    candidates.append("brain_reference.png")
+
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return candidates[0]
+
+
 def get_brain_icon(size: int = 22) -> QIcon:
     """
     Create an optically balanced, crisp macOS menu bar template icon
     from the reference brain silhouette.
     """
-    asset_path = os.path.join(os.path.dirname(__file__), "assets", "brain_template.png")
-    if os.path.exists(asset_path):
-        ref_img = QImage(asset_path)
-    else:
-        ref_img = QImage("brain_reference.png")
+    ref_img = QImage(_resolve_brain_png_path())
 
     # Target canvas: size x size pt (rendered at 2x Retina resolution: (size*2) x (size*2))
     canvas_size = size * 2
@@ -49,7 +62,8 @@ def get_brain_icon(size: int = 22) -> QIcon:
     x_pos = (canvas_size - glyph_w) / 2.0
     y_pos = (canvas_size - glyph_h) / 2.0 - 2.5
 
-    painter.drawImage(QRectF(x_pos, y_pos, glyph_w, glyph_h), ref_img)
+    if not ref_img.isNull():
+        painter.drawImage(QRectF(x_pos, y_pos, glyph_w, glyph_h), ref_img)
     painter.end()
 
     pixmap = QPixmap.fromImage(canvas)
