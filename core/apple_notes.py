@@ -4,18 +4,26 @@ import subprocess
 from typing import Any, Dict, List, Optional
 
 
-def to_html_paragraphs(text: str) -> str:
-    """Convert line-separated text to HTML paragraphs and line breaks."""
+def to_html_paragraphs(text: str, words_per_paragraph: int = 75) -> str:
+    """Format raw transcript or article content into well-spaced, readable HTML paragraphs."""
     if not text:
         return ""
-    paras = text.split("\n\n")
+    
+    # If text already has double-newlines, respect them; otherwise chunk by words
+    raw_paras = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if len(raw_paras) > 1:
+        html_paras = []
+        for p in raw_paras:
+            p_escaped = html.escape(p).replace("\n", "<br>")
+            html_paras.append(f"<p>{p_escaped}</p>\n<div><br></div>")
+        return "\n".join(html_paras)
+
+    # Single wall of text: chunk by word count
+    words = text.split()
     html_paras = []
-    for p in paras:
-        p_clean = p.strip()
-        if not p_clean:
-            continue
-        p_escaped = html.escape(p_clean).replace("\n", "<br>")
-        html_paras.append(f"<p>{p_escaped}</p>")
+    for i in range(0, len(words), words_per_paragraph):
+        chunk = " ".join(words[i : i + words_per_paragraph])
+        html_paras.append(f"<p>{html.escape(chunk)}</p>\n<div><br></div>")
     return "\n".join(html_paras)
 
 
@@ -26,86 +34,114 @@ def build_apple_notes_html(
 ) -> str:
     """
     Constructs clean, styled HTML content optimized for Apple Notes.
-    Apple Notes rich text rendering supports standard HTML tags:
-    <h1>, <h2>, <h3>, <p>, <blockquote>, <ul>, <li>, <b>, <i>, <a>, <hr>.
+    - Uses suggested/generated recall title (no clickbait).
+    - Centered and underlined main section headers.
+    - Centered bold-italic subheaders.
+    - Structured property card for metadata.
+    - Single empty line spacer (<div><br></div>) between sections.
+    - Indented blockquote styling for flashcard answers.
+    - Formatted, well-spaced paragraphs for transcripts.
     """
     original_title = metadata.get("title", "Untitled Video")
+    agent_title = (analysis.get("suggested_title") or original_title).strip()
     channel = metadata.get("channel", "Unknown Source")
     url = metadata.get("url", "")
     content_type = metadata.get("content_type", "video")
 
-    # Header / Meta
     out = []
-    out.append(f"<h1>{html.escape(original_title)}</h1>")
-    
-    meta_p = f"<b>Source:</b> {html.escape(channel)}"
+
+    # Title & spacer
+    out.append(f"<h1>{html.escape(agent_title)}</h1>")
+    out.append("<div><br></div>")
+
+    # Structured metadata list
+    meta_items = []
+    if channel:
+        meta_items.append(f"<li><b>Source:</b> {html.escape(channel)}</li>")
+    if original_title and original_title != agent_title:
+        meta_items.append(f"<li><b>Original Title:</b> {html.escape(original_title)}</li>")
     if url:
-        meta_p += f' | <a href="{html.escape(url)}">{html.escape(url)}</a>'
-    out.append(f"<p>{meta_p}</p>")
+        link_label = "Watch on YouTube" if content_type == "video" else "Source Link"
+        meta_items.append(f'<li><b>Link:</b> <a href="{html.escape(url)}">{link_label}</a></li>')
 
     tags = analysis.get("tags") or []
     if tags:
         tag_str = ", ".join([f"#{t.strip()}" for t in tags if t.strip()])
-        out.append(f"<p><i>Tags: {html.escape(tag_str)}</i></p>")
+        meta_items.append(f"<li><b>Tags:</b> {html.escape(tag_str)}</li>")
 
+    out.append("<ul>" + "".join(meta_items) + "</ul>")
     out.append("<hr>")
+
+    def section_header(title: str) -> str:
+        return f'<center><h2><u>{html.escape(title)}</u></h2></center>\n<div><br></div>'
+
+    def sub_header(title: str) -> str:
+        return f'<center><p><b><i>{html.escape(title)}</i></b></p></center>\n<div><br></div>'
 
     # Executive Summary
     exec_summary = (analysis.get("executive_summary") or "").strip()
     if exec_summary:
-        out.append("<h2>Executive Summary</h2>")
+        out.append(section_header("Executive Summary"))
         out.append(f"<blockquote><p>{html.escape(exec_summary)}</p></blockquote>")
+        out.append("<div><br></div>")
 
     # Flashcards
     flashcards = analysis.get("flashcards") or []
     if flashcards:
-        out.append("<h2>Flashcards</h2>")
+        out.append(section_header("Flash Cards"))
         core_cards = [c for c in flashcards if c.get("tier") == "Core Concept"]
         deep_cards = [c for c in flashcards if c.get("tier") != "Core Concept"]
 
         card_idx = 1
         if core_cards:
-            out.append("<h3>Core Concepts (Foundations & Vocabulary)</h3>")
+            out.append(sub_header("Core Concepts (Foundations & Vocabulary)"))
             for c in core_cards:
                 q = html.escape(c.get("front", "").strip())
                 a = html.escape(c.get("back", "").strip())
-                out.append(f"<p><b>Q{card_idx}: {q}</b><br><i>A:</i> {a}</p>")
+                out.append(f"<p><b>Q{card_idx}: {q}</b></p>")
+                out.append(f"<blockquote><p><i>A: {a}</i></p></blockquote>")
+                out.append("<div><br></div>")
                 card_idx += 1
 
         if deep_cards:
-            out.append("<h3>Deep Dives (Mechanisms, Evidence & Nuance)</h3>")
+            out.append(sub_header("Deep Dives (Mechanisms, Evidence & Nuance)"))
             for c in deep_cards:
                 q = html.escape(c.get("front", "").strip())
                 a = html.escape(c.get("back", "").strip())
-                out.append(f"<p><b>Q{card_idx}: {q}</b><br><i>A:</i> {a}</p>")
+                out.append(f"<p><b>Q{card_idx}: {q}</b></p>")
+                out.append(f"<blockquote><p><i>A: {a}</i></p></blockquote>")
+                out.append("<div><br></div>")
                 card_idx += 1
 
     # Abstracts
     short_abstract = (analysis.get("short_abstract") or "").strip()
     detailed_abstract = (analysis.get("detailed_abstract") or "").strip()
     if short_abstract or detailed_abstract:
-        out.append("<h2>Abstract</h2>")
+        out.append(section_header("Abstract"))
         if short_abstract:
-            out.append("<p><b>Quick Summary:</b></p>")
+            out.append(sub_header("Quick Summary"))
             out.append(f"<blockquote><p>{html.escape(short_abstract)}</p></blockquote>")
+            out.append("<div><br></div>")
         if detailed_abstract:
-            out.append("<p><b>Detailed Overview:</b></p>")
+            out.append(sub_header("Detailed Overview"))
             out.append(f"<blockquote><p>{html.escape(detailed_abstract)}</p></blockquote>")
+            out.append("<div><br></div>")
 
     # Key Concepts & Takeaways
     takeaways = analysis.get("key_takeaways") or []
     if takeaways:
-        out.append("<h2>Key Concepts and Takeaways</h2>")
+        out.append(section_header("Key Concepts and Takeaways"))
         out.append("<ul>")
         for pt in takeaways:
             out.append(f"<li>{html.escape(str(pt).strip())}</li>")
         out.append("</ul>")
+        out.append("<div><br></div>")
 
     # Outline
     outline_items = analysis.get("outline") or []
     if outline_items:
         outline_heading = "Article Outline" if content_type == "article" else "Video Outline"
-        out.append(f"<h2>{outline_heading}</h2>")
+        out.append(section_header(outline_heading))
         for item in outline_items:
             c_title = html.escape(item.get("title", "Section").strip())
             ts_display = item.get("timestamp_display", "").strip()
@@ -119,9 +155,8 @@ def build_apple_notes_html(
             else:
                 ts_link = ""
 
-            out.append(f"<h3>{ts_link}{c_title}</h3>")
+            out.append(f"<p><b>{ts_link}{c_title}</b></p>")
             if c_summary:
-                # Format bullets or paragraphs in section summary
                 lines = c_summary.split("\n")
                 in_list = False
                 for line in lines:
@@ -144,12 +179,12 @@ def build_apple_notes_html(
                         out.append(f"<p>{html.escape(line_s)}</p>")
                 if in_list:
                     out.append("</ul>")
+            out.append("<div><br></div>")
 
     # Full Content / Transcript
     if raw_transcript:
         content_heading = "Detailed Content" if content_type == "article" else "Full Transcript"
-        out.append("<hr>")
-        out.append(f"<h2>{content_heading}</h2>")
+        out.append(section_header(content_heading))
         out.append(to_html_paragraphs(raw_transcript))
 
     return "\n".join(out)

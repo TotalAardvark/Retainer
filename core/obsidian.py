@@ -134,9 +134,18 @@ def save_obsidian_note(
 
     # Format Executive Summary (30-40 word concise summary)
     exec_summary = (analysis.get("executive_summary") or "").strip()
+    thumbnail_url = metadata.get("thumbnail") or ""
+    thumbnail_frontmatter = f'\nthumbnail: "{thumbnail_url}"' if thumbnail_url else ""
+
     exec_summary_section = ""
     if exec_summary:
-        exec_summary_section = f"## Executive Summary\n\n{to_blockquote(exec_summary)}\n\n"
+        if thumbnail_url:
+            thumb_tag = f'<img src="{thumbnail_url}" align="right" width="200" style="border-radius: 8px; margin: 0 0 10px 16px;">'
+            exec_summary_section = f"## Executive Summary {thumb_tag}\n\n{to_blockquote(exec_summary)}\n\n"
+        else:
+            exec_summary_section = f"## Executive Summary\n\n{to_blockquote(exec_summary)}\n\n"
+    elif thumbnail_url:
+        exec_summary_section = f'<p align="right"><img src="{thumbnail_url}" width="200" style="border-radius: 8px;"></p>\n\n'
 
     # Format Abstracts
     short_abstract = analysis.get("short_abstract", "").strip()
@@ -213,7 +222,7 @@ def save_obsidian_note(
     markdown_content = f"""---
 title: "{original_title.replace('"', '')}"
 channel: "{channel.replace('"', '')}"
-url: "{url}"
+url: "{url}"{thumbnail_frontmatter}
 tags: [{tags_yaml}]
 ---
 

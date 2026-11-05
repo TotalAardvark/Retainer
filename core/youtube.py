@@ -89,6 +89,7 @@ def _fetch_metadata_oembed(video_id: str) -> Dict[str, Any]:
             "channel": data.get("author_name", "Unknown Channel"),
             "upload_date": "",
             "url": video_url,
+            "thumbnail": f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg",
             "duration": 0,
             "chapters": chapters,
         }
@@ -122,6 +123,7 @@ def fetch_video_metadata(video_id: str) -> Dict[str, Any]:
                 "channel": info.get("uploader") or info.get("channel", "Unknown Channel"),
                 "upload_date": info.get("upload_date", ""),
                 "url": f"https://www.youtube.com/watch?v={video_id}",
+                "thumbnail": f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg",
                 "duration": info.get("duration", 0),
                 "chapters": chapters,
             }
