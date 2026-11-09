@@ -7,9 +7,7 @@ datas = [
     ('brain_reference.png', '.'),
 ]
 binaries = []
-hiddenimports = []
-tmp_ret = collect_all('PyQt6')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+hiddenimports = ['PyQt6.QtSvg']
 tmp_ret = collect_all('google.genai')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('youtube_transcript_api')
@@ -27,7 +25,35 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'PyQt6.QtQuick',
+        'PyQt6.QtQml',
+        'PyQt6.QtPdf',
+        'PyQt6.QtPdfWidgets',
+        'PyQt6.QtMultimedia',
+        'PyQt6.QtMultimediaWidgets',
+        'PyQt6.QtDesigner',
+        'PyQt6.QtQuick3D',
+        'PyQt6.QtQuickWidgets',
+        'PyQt6.QtBluetooth',
+        'PyQt6.QtSensors',
+        'PyQt6.QtPositioning',
+        'PyQt6.QtNfc',
+        'PyQt6.QtWebSockets',
+        'PyQt6.QtWebChannel',
+        'PyQt6.QtRemoteObjects',
+        'PyQt6.QtSql',
+        'PyQt6.QtTest',
+        'PyQt6.QtTextToSpeech',
+        'PyQt6.QtSpatialAudio',
+        'PyQt6.QtSerialPort',
+        'PyQt6.QtStateMachine',
+        'PyQt6.QtHelp',
+        'PyQt6.QtDBus',
+        'PyQt6.QtOpenGL',
+        'PyQt6.QtOpenGLWidgets',
+        'PyQt6.QtPrintSupport',
+    ],
     noarchive=False,
     optimize=0,
 )
